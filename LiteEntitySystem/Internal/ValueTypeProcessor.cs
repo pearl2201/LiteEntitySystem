@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace LiteEntitySystem.Internal
 {
@@ -13,17 +14,17 @@ namespace LiteEntitySystem.Internal
 
         protected ValueTypeProcessor(int size) => Size = size;
 
-        internal abstract void InitSyncVar(InternalBaseClass obj, int offset, InternalEntity entity, ushort fieldId);
-        internal abstract void SetFrom(InternalBaseClass obj, int offset, byte* data);
-        internal abstract bool SetFromAndSync(InternalBaseClass obj, int offset, byte* data, bool copyPrevValueIntoData);
-        internal abstract void SetFromAndSync(InternalBaseClass obj, int offset, byte* data, MethodCallDelegate onSyncDelegate);
-        internal abstract void SetInterpValue(InternalBaseClass obj, int offset, byte* data);
-        internal abstract void SetInterpValueFromCurrentValue(InternalBaseClass obj, int offset);
-        internal abstract void WriteTo(InternalBaseClass obj, int offset, byte* data);
-        internal abstract void CopyFrom(InternalBaseClass toObj, InternalBaseClass fromObj, int offset);
-        internal abstract void LoadHistory(InternalBaseClass obj, int offset, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime);
-        internal abstract int GetHashCode(InternalBaseClass obj, int offset);
-        internal abstract string ToString(InternalBaseClass obj, int offset);
+        internal abstract void InitSyncVar(InternalBaseClass obj, Delegate accessor, InternalEntity entity, ushort fieldId);
+        internal abstract void SetFrom(InternalBaseClass obj, Delegate accessor, byte* data);
+        internal abstract bool SetFromAndSync(InternalBaseClass obj, Delegate accessor, byte* data, bool copyPrevValueIntoData);
+        internal abstract void SetFromAndSync(InternalBaseClass obj, Delegate accessor, byte* data, MethodCallDelegate onSyncDelegate);
+        internal abstract void SetInterpValue(InternalBaseClass obj, Delegate accessor, byte* data);
+        internal abstract void SetInterpValueFromCurrentValue(InternalBaseClass obj, Delegate accessor);
+        internal abstract void WriteTo(InternalBaseClass obj, Delegate accessor, byte* data);
+        internal abstract void CopyFrom(InternalBaseClass toObj, InternalBaseClass fromObj, Delegate accessor);
+        internal abstract void LoadHistory(InternalBaseClass obj, Delegate accessor, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime);
+        internal abstract int GetHashCode(InternalBaseClass obj, Delegate accessor);
+        internal abstract string ToString(InternalBaseClass obj, Delegate accessor);
     }
 
     internal unsafe class ValueTypeProcessor<T> : ValueTypeProcessor where T : unmanaged
@@ -32,64 +33,64 @@ namespace LiteEntitySystem.Internal
 
         internal virtual T GetInterpolatedValue(T prev, T current, float t) => current;
 
-        internal sealed override void InitSyncVar(InternalBaseClass obj, int offset, InternalEntity entity, ushort fieldId)
-        {
-            var sv = RefMagic.GetFieldValue<SyncVar<T>>(obj, offset);
-            sv.Init(entity, fieldId);
-            RefMagic.SetFieldValue(obj, offset, sv);
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static ref SyncVar<T> GetRef(InternalBaseClass obj, Delegate accessor) =>
+            ref ((SyncVarRefGetter<T>)accessor)(obj);
 
-        internal override void CopyFrom(InternalBaseClass toObj, InternalBaseClass fromObj, int offset) =>
-            RefMagic.SyncVarSetDirect<T, SyncVar<T>>(toObj, offset, RefMagic.GetFieldValue<SyncVar<T>>(fromObj, offset).Value);
+        internal sealed override void InitSyncVar(InternalBaseClass obj, Delegate accessor, InternalEntity entity, ushort fieldId) =>
+            GetRef(obj, accessor).Init(entity, fieldId);
 
-        internal override void LoadHistory(InternalBaseClass obj, int offset, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
-            RefMagic.SyncVarSetDirectAndStorePrev<T, SyncVar<T>>(obj, offset, *(T*)historyA, out *(T*)tempHistory);
+        internal override void CopyFrom(InternalBaseClass toObj, InternalBaseClass fromObj, Delegate accessor) =>
+            GetRef(toObj, accessor).SetDirect(GetRef(fromObj, accessor).Value);
+
+        internal override void LoadHistory(InternalBaseClass obj, Delegate accessor, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
+            GetRef(obj, accessor).SetDirectAndStorePrev(*(T*)historyA, out *(T*)tempHistory);
         
-        internal sealed override void SetFrom(InternalBaseClass obj, int offset, byte* data) =>
-            RefMagic.SyncVarSetDirect<T, SyncVar<T>>(obj, offset, *(T*)data);
+        internal sealed override void SetFrom(InternalBaseClass obj, Delegate accessor, byte* data) =>
+            GetRef(obj, accessor).SetDirect(*(T*)data);
 
-        internal sealed override bool SetFromAndSync(InternalBaseClass obj, int offset, byte* data, bool copyPrevValueIntoData)
+        internal sealed override bool SetFromAndSync(InternalBaseClass obj, Delegate accessor, byte* data, bool copyPrevValueIntoData)
         {
             if(copyPrevValueIntoData)
             {
-                return RefMagic.SyncVarSetFromAndSync<T, SyncVar<T>>(obj, offset, ref *(T*)data);
+                return GetRef(obj, accessor).SetFromAndSync(ref *(T*)data);
             }
             else
             {
                 var tempData = *(T*)data;
-                return RefMagic.SyncVarSetFromAndSync<T, SyncVar<T>>(obj, offset, ref tempData);
+                return GetRef(obj, accessor).SetFromAndSync(ref tempData);
             }
         }
 
-        internal sealed override void SetFromAndSync(InternalBaseClass obj, int offset, byte* data, MethodCallDelegate onSyncDelegate)
+        internal sealed override void SetFromAndSync(InternalBaseClass obj, Delegate accessor, byte* data, MethodCallDelegate onSyncDelegate)
         {
             var tempData = *(T*)data;
-            if(RefMagic.SyncVarSetFromAndSync<T, SyncVar<T>>(obj, offset, ref tempData))
+            if(GetRef(obj, accessor).SetFromAndSync(ref tempData))
                 onSyncDelegate(obj, new ReadOnlySpan<byte>(&tempData, Size));
         }
 
-        internal sealed override void SetInterpValue(InternalBaseClass obj, int offset, byte* data) =>
-            RefMagic.SyncVarSetInterp<T, SyncVar<T>>(obj, offset, *(T*)data);
+        internal sealed override void SetInterpValue(InternalBaseClass obj, Delegate accessor, byte* data) =>
+            GetRef(obj, accessor).SetInterpValue(*(T*)data);
         
-        internal sealed override void SetInterpValueFromCurrentValue(InternalBaseClass obj, int offset) =>
-            RefMagic.SyncVarSetInterpFromCurrent<T, SyncVar<T>>(obj, offset);
+        internal sealed override void SetInterpValueFromCurrentValue(InternalBaseClass obj, Delegate accessor) =>
+            GetRef(obj, accessor).SetInterpValueFromCurrent();
 
-        internal sealed override void WriteTo(InternalBaseClass obj, int offset, byte* data) =>
-            *(T*)data = RefMagic.GetFieldValue<SyncVar<T>>(obj, offset);
+        internal sealed override void WriteTo(InternalBaseClass obj, Delegate accessor, byte* data) =>
+            *(T*)data = GetRef(obj, accessor).Value;
 
-        internal sealed override int GetHashCode(InternalBaseClass obj, int offset) =>
-            RefMagic.GetFieldValue<SyncVar<T>>(obj, offset).GetHashCode();
+        internal sealed override int GetHashCode(InternalBaseClass obj, Delegate accessor) =>
+            GetRef(obj, accessor).GetHashCode();
         
-        internal sealed override string ToString(InternalBaseClass obj, int offset) =>
-            RefMagic.GetFieldValue<SyncVar<T>>(obj, offset).ToString();
+        internal sealed override string ToString(InternalBaseClass obj, Delegate accessor) =>
+            GetRef(obj, accessor).ToString();
     }
 
     internal class ValueTypeProcessorInt : ValueTypeProcessor<int>
     {
         internal override int GetInterpolatedValue(int prev, int current, float t) => Utils.Lerp(prev, current, t);
         
-        internal override unsafe void LoadHistory(InternalBaseClass obj, int offset, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
-            RefMagic.SyncVarSetDirectAndStorePrev<int, SyncVar<int>>(obj, offset,
+        internal override unsafe void LoadHistory(InternalBaseClass obj, Delegate accessor, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
+            GetRef(obj, accessor).SetDirectAndStorePrev(
                 Utils.Lerp(*(int*)historyA, *(int*)historyB, lerpTime), out *(int*)tempHistory);
     }
     
@@ -97,8 +98,8 @@ namespace LiteEntitySystem.Internal
     {
         internal override long GetInterpolatedValue(long prev, long current, float t) => Utils.Lerp(prev, current, t);
         
-        internal override unsafe void LoadHistory(InternalBaseClass obj, int offset, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
-            RefMagic.SyncVarSetDirectAndStorePrev<long, SyncVar<long>>(obj, offset,
+        internal override unsafe void LoadHistory(InternalBaseClass obj, Delegate accessor, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
+            GetRef(obj, accessor).SetDirectAndStorePrev(
                 Utils.Lerp(*(long*)historyA, *(long*)historyB, lerpTime), out *(long*)tempHistory);
     }
 
@@ -106,8 +107,8 @@ namespace LiteEntitySystem.Internal
     {
         internal override float GetInterpolatedValue(float prev, float current, float t) => Utils.Lerp(prev, current, t);
         
-        internal override unsafe void LoadHistory(InternalBaseClass obj, int offset, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
-            RefMagic.SyncVarSetDirectAndStorePrev<float, SyncVar<float>>(obj, offset,
+        internal override unsafe void LoadHistory(InternalBaseClass obj, Delegate accessor, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
+            GetRef(obj, accessor).SetDirectAndStorePrev(
                 Utils.Lerp(*(float*)historyA, *(float*)historyB, lerpTime), out *(float*)tempHistory);
     }
     
@@ -115,8 +116,8 @@ namespace LiteEntitySystem.Internal
     {
         internal override double GetInterpolatedValue(double prev, double current, float t) => Utils.Lerp(prev, current, t);
         
-        internal override unsafe void LoadHistory(InternalBaseClass obj, int offset, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
-            RefMagic.SyncVarSetDirectAndStorePrev<double, SyncVar<double>>(obj, offset,
+        internal override unsafe void LoadHistory(InternalBaseClass obj, Delegate accessor, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
+            GetRef(obj, accessor).SetDirectAndStorePrev(
                 Utils.Lerp(*(double*)historyA, *(double*)historyB, lerpTime), out *(double*)tempHistory);
     }
 
@@ -126,8 +127,8 @@ namespace LiteEntitySystem.Internal
 
         internal override T GetInterpolatedValue(T prev, T current, float t) => _interpDelegate?.Invoke(prev, current, t) ?? current; 
         
-        internal override void LoadHistory(InternalBaseClass obj, int offset, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
-            RefMagic.SyncVarSetDirectAndStorePrev<T, SyncVar<T>>(obj, offset,
+        internal override void LoadHistory(InternalBaseClass obj, Delegate accessor, byte* tempHistory, byte* historyA, byte* historyB, float lerpTime) =>
+            GetRef(obj, accessor).SetDirectAndStorePrev(
                 _interpDelegate?.Invoke(*(T*)historyA, *(T*)historyB, lerpTime) ?? *(T*)historyA, out *(T*)tempHistory);
 
         public UserTypeProcessor(InterpolatorDelegateWithReturn<T> interpolationDelegate) =>

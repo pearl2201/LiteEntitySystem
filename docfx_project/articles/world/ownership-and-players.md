@@ -30,7 +30,7 @@ A bomb inherits its planter's ownership, so the planter's client predicts it:
 using LiteEntitySystem;
 
 [EntityFlags(EntityFlags.Updateable)]
-public class Bomb : EntityLogic
+public partial class Bomb : EntityLogic
 {
     public SyncVar<float> Timer;
 

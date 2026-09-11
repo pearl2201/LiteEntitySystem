@@ -27,7 +27,7 @@ using LiteEntitySystem;
 public enum ReactorMode : byte { Idle, Charging, Venting }
 
 [EntityFlags(EntityFlags.Updateable)]
-public class Reactor : EntityLogic
+public partial class Reactor : EntityLogic
 {
     [SyncVarFlags(SyncFlags.Interpolated)]
     public SyncVar<float> Heat;
@@ -55,6 +55,10 @@ public class Reactor : EntityLogic
 Reading works either way — `.Value` or the implicit conversion to `T` (`if (Heat > 100f)`). Writing must always go through `.Value`. Assigning the field itself (`Heat = new SyncVar<float>()`) replaces the wrapper, losing its link to the entity, and synchronization for that field silently dies. The shipped Roslyn analyzer turns this into a compile error — see [installation](../getting-started/installation.md).
 
 Each write compares the bytes and only marks the field dirty when the value actually differs, so assigning the same value every tick costs nothing on the wire.
+
+### Why the class is `partial`
+
+The synchronization system reaches each `SyncVar<T>` field from code that only knows the entity's *class id*, not its concrete type. A Roslyn source generator emits a typed accessor for every field you declare and writes them into a partial declaration of your class — which is why the modifier is required, and why `SyncVar<T>` fields cannot be `readonly`. Do not confuse the two rules: a `SyncableField` **member** must be `readonly`, while the `SyncVar<T>` fields *inside* it must not. Rules, generated shape, and the hand-written escape hatch are on the [source generation page](../integration/source-generation.md).
 
 ### Which types are allowed
 

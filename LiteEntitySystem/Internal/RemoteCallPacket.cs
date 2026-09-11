@@ -54,7 +54,7 @@ namespace LiteEntitySystem.Internal
         {
             int headerEncodedSize = RpcDeltaCompressor.Encode(ref prevHeader, ref Header, new Span<byte>(resultData + position, RpcDeltaCompressor.MaxDeltaSize));
             fixed (byte* rpcData = Data)
-                RefMagic.CopyBlock(resultData + headerEncodedSize + position, rpcData, Header.ByteCount);
+                Buffer.MemoryCopy(rpcData, resultData + headerEncodedSize + position, Header.ByteCount, Header.ByteCount);
             position += headerEncodedSize + Header.ByteCount;
             prevHeader = Header;
             return headerEncodedSize + Header.ByteCount;

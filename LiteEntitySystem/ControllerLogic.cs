@@ -6,7 +6,7 @@ namespace LiteEntitySystem
     /// Base class for Controller entities
     /// </summary>
     [EntityFlags(EntityFlags.OnlyForOwner)]
-    public abstract class ControllerLogic : InternalEntity
+    public abstract partial class ControllerLogic : InternalEntity
     {
         [SyncVarFlags(SyncFlags.NeverRollBack)]
         private SyncVar<EntitySharedReference> _controlledEntity;

@@ -17,16 +17,20 @@ Pure C# HighLevel API for multiplayer games using .NET Standard 2.1
 
 ## Manual installation notices
 
-Please use Roslyn Analyzer (inside AnalyzerBinary) to prevent errors when assigning SyncVars.
+Please use the Roslyn analyzer/source generator (inside AnalyzerBinary) to prevent errors when assigning SyncVars.
 Only SyncVar.Value can be changed (never do x = new SyncVar())
+
+Any type that declares `SyncVar<T>` or `SyncableField` fields must be declared `partial`. The source generator emits the
+field accessors into those partial declarations, and reports a compile-time error (`LES0002`) if a type is missing the
+modifier. SyncVar fields also cannot be `readonly` (`LES0003`).
 
 ## Features
 
-* .NET Standard 2.1 and pure C# (but with some IL magic)
+* .NET Standard 2.1 and pure C# (no IL assembly, no runtime field offsets)
 * Can be used with Unity (2021.2 and later), Godot, Monogame or just pure .net
 * Can be used for creation any multiplayer game (2d,3d,4d,...), but best suited for fast paced games like FPS/TPS shooters and action rpg
 * Can handle up to 255 players on one instance
-* Works with Unity IL2CPP
+* Works with Unity IL2CPP and WebGL
 * Epic speed
 * Lag compensation
 * Serialization of custom types (like strings,lists,arrays,jsons,etc)

@@ -64,14 +64,14 @@ namespace LiteEntitySystem.Extensions
             if (_data.Length < _serverData.Length)
                 Array.Resize(ref _data, _serverData.Length);
             fixed (void* serverData = _serverData, data = _data)
-                RefMagic.CopyBlock(data, serverData, (uint)(_count * sizeof(T)));
+                Buffer.MemoryCopy(serverData, data, _count * sizeof(T), _count * sizeof(T));
         }
 
         protected internal override unsafe void OnRollback()
         {
             _count = _serverCount;
             fixed (void* serverData = _serverData, data = _data)
-                RefMagic.CopyBlock(data, serverData, (uint)(_count * sizeof(T)));
+                Buffer.MemoryCopy(serverData, data, _count * sizeof(T), _count * sizeof(T));
         }
 
         protected internal override void RegisterRPC(ref SyncableRPCRegistrator r)

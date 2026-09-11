@@ -23,7 +23,7 @@ description: Binding callbacks to SyncVar changes - the two binding forms, the p
 ```csharp
 using LiteEntitySystem;
 
-public class Lamp : EntityLogic
+public partial class Lamp : EntityLogic
 {
     public SyncVar<bool> IsOn;
     public SyncVar<byte> Brightness;

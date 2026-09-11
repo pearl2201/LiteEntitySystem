@@ -242,60 +242,35 @@ namespace LiteEntitySystem
             var genericTypeDef = ft.GetGenericTypeDefinition();
             return genericTypeDef == typeof(RemoteCall<>) || genericTypeDef == typeof(RemoteCallSpan<>);
         }
-        
-        private class TestOffset
-        {
-            public readonly uint TestValue = 0xDEADBEEF;
-        }
-        
-        /*
-        Offsets
-        [StructLayout(LayoutKind.Explicit)]
-        public unsafe struct DotnetClassField
-        {
-            [FieldOffset(0)] private readonly void* _pMTOfEnclosingClass;
-            [FieldOffset(8)] private readonly uint _dword1;
-            [FieldOffset(12)] private readonly uint _dword2;
-            public int Offset => (int) (_dword2 & 0x7FFFFFF);
-        }
 
-        public unsafe struct MonoClassField
+        /// <summary>
+        /// Size in bytes of an enum type (same as the size of its underlying type).
+        /// </summary>
+        internal static int GetEnumSize(Type enumType)
         {
-            private void *_type;
-            private void *_name;
-            private	void *_parent_and_flags;
-            public int Offset;
+            switch (Type.GetTypeCode(Enum.GetUnderlyingType(enumType)))
+            {
+                case TypeCode.SByte:
+                case TypeCode.Byte:
+                case TypeCode.Boolean:
+                    return 1;
+                case TypeCode.Int16:
+                case TypeCode.UInt16:
+                case TypeCode.Char:
+                    return 2;
+                case TypeCode.Int32:
+                case TypeCode.UInt32:
+                case TypeCode.Single:
+                    return 4;
+                case TypeCode.Int64:
+                case TypeCode.UInt64:
+                case TypeCode.Double:
+                    return 8;
+                default:
+                    throw new Exception($"Unsupported enum underlying type for: {enumType}");
+            }
         }
-        */
         
         public static readonly ThreadLocal<UTF8Encoding> Encoding = new (() => new UTF8Encoding(false, true));
-
-        private static readonly int MonoOffset = IntPtr.Size * 3;
-        private static readonly int DotNetOffset = IntPtr.Size + 4;
-        private static readonly bool IsMono;
-
-        internal static int GetFieldOffset(FieldInfo fieldInfo)
-        {
-            //build offsets in runtime metadata
-            if(fieldInfo.DeclaringType != null)
-                RuntimeHelpers.RunClassConstructor(fieldInfo.DeclaringType.TypeHandle);
-            return IsMono
-                ? Marshal.ReadInt32(fieldInfo.FieldHandle.Value + MonoOffset)
-                : (Marshal.ReadInt32(fieldInfo.FieldHandle.Value + DotNetOffset) & 0xFFFFFF) + IntPtr.Size;
-        }
-
-        static Utils()
-        {            
-            IsMono = Type.GetType("Mono.Runtime") != null
-                     || RuntimeInformation.OSDescription.Contains("android")
-                     || RuntimeInformation.OSDescription.Contains("ios");
-            
-            //check field offset
-            var field = typeof(TestOffset).GetField("TestValue");
-            int offset = GetFieldOffset(field);
-            var to = new TestOffset();
-            if (RefMagic.GetFieldValue<uint>(to, offset) != to.TestValue)
-                Logger.LogError("Unknown native field offset");
-        }
     }
 }

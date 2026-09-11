@@ -26,7 +26,7 @@ Normally only the server creates entities, so a client waits a round trip before
 using LiteEntitySystem;
 
 [EntityFlags(EntityFlags.UpdateOnClient)]
-public class Fireball : PredictableEntityLogic
+public partial class Fireball : PredictableEntityLogic
 {
     [SyncVarFlags(SyncFlags.Interpolated)]
     public SyncVar<float> X;

@@ -29,7 +29,7 @@ Flags combine with `|`. Applied to a class instead of a field, the attribute bec
 using LiteEntitySystem;
 
 [EntityFlags(EntityFlags.Updateable)]
-public class Fighter : PawnLogic
+public partial class Fighter : PawnLogic
 {
     // rendered every frame and shot at → interpolate and keep history
     [SyncVarFlags(SyncFlags.Interpolated | SyncFlags.LagCompensated)]

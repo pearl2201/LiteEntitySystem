@@ -92,6 +92,8 @@
       href: netcode/diagnostics.md
 - name: Integration and Reference
   items:
+    - name: Source generation and field access
+      href: integration/source-generation.md
     - name: Transport layer
       href: integration/transport.md
     - name: 'Hosting: dedicated and listen-server'

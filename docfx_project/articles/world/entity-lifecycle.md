@@ -33,7 +33,7 @@ The current state is `CreationState`; `IsConstructed`, `IsDestroyed` and `IsRemo
 ```csharp
 using LiteEntitySystem;
 
-public class Turret : EntityLogic
+public partial class Turret : EntityLogic
 {
     public SyncVar<EntitySharedReference> Target;
 

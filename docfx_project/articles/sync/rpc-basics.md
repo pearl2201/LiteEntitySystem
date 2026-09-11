@@ -25,7 +25,7 @@ An RPC is a one-shot call the server sends to clients, ordered with the state st
 using LiteEntitySystem;
 
 [EntityFlags(EntityFlags.Updateable)]
-public class Grenade : EntityLogic
+public partial class Grenade : EntityLogic
 {
     private static RemoteCall _fuseHissRpc;
     private static RemoteCall<byte> _explodeRpc;

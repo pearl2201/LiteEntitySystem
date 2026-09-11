@@ -6,32 +6,36 @@ namespace LiteEntitySystem.Internal
 {
     internal struct SyncableFieldInfo
     {
-        public readonly int Offset;
+        public readonly Type OwnerType;
+        public readonly string FieldName;
         public readonly SyncFlags Flags;
         public ushort RPCOffset;
+        public ObjectFieldGetter<SyncableField> Accessor;
 
-        public SyncableFieldInfo(int offset, SyncFlags executeFlags)
+        public SyncableFieldInfo(Type ownerType, string fieldName, SyncFlags executeFlags)
         {
-            Offset = offset;
+            OwnerType = ownerType;
+            FieldName = fieldName;
             Flags = executeFlags;
             RPCOffset = ushort.MaxValue;
+            Accessor = null;
         }
     }
     
     internal readonly struct RpcFieldInfo
     {
-        public readonly int SyncableOffset;
+        public readonly ObjectFieldGetter<SyncableField> SyncableAccessor;
         public readonly MethodCallDelegate Method;
 
         public RpcFieldInfo(MethodCallDelegate method)
         {
-            SyncableOffset = -1;
+            SyncableAccessor = null;
             Method = method;
         }
         
-        public RpcFieldInfo(int syncableOffset, MethodCallDelegate method)
+        public RpcFieldInfo(ObjectFieldGetter<SyncableField> syncableAccessor, MethodCallDelegate method)
         {
-            SyncableOffset = syncableOffset;
+            SyncableAccessor = syncableAccessor;
             Method = method;
         }
     }
@@ -101,7 +105,7 @@ namespace LiteEntitySystem.Internal
                 for (int i = 0; i < LagCompensatedCount; i++)
                 {
                     ref var field = ref LagCompensatedFields[i];
-                    field.TypeProcessor.WriteTo(e, field.Offset, history + historyOffset);
+                    field.TypeProcessor.WriteTo(e, field.ValueAccessor, history + historyOffset);
                     historyOffset += field.IntSize;
                 }
             }
@@ -119,7 +123,7 @@ namespace LiteEntitySystem.Internal
                     ref var field = ref LagCompensatedFields[i];
                     field.TypeProcessor.LoadHistory(
                         e, 
-                        field.Offset,
+                        field.ValueAccessor,
                         history + historyCurrent,
                         history + historyAOffset,
                         history + historyBOffset,
@@ -139,7 +143,7 @@ namespace LiteEntitySystem.Internal
                 for (int i = 0; i < LagCompensatedCount; i++)
                 {
                     ref var field = ref LagCompensatedFields[i];
-                    field.TypeProcessor.SetFrom(e, field.Offset, history + historyOffset);
+                    field.TypeProcessor.SetFrom(e, field.ValueAccessor, history + historyOffset);
                     historyOffset += field.IntSize;
                 }
             }
@@ -169,6 +173,7 @@ namespace LiteEntitySystem.Internal
         public EntityClassData(EntityManager entityManager, ushort filterId, Type entType, RegisteredTypeInfo typeInfo)
         {
             _dataCache = new Queue<byte[]>();
+            _accessorsResolved = false;
             PredictedSize = 0;
             FixedFieldsSize = 0;
             LagCompensatedSize = 0;
@@ -213,26 +218,39 @@ namespace LiteEntitySystem.Internal
                     
                     var syncVarFlags = field.GetCustomAttribute<SyncVarFlags>() ?? baseType.GetCustomAttribute<SyncVarFlags>();
                     var syncFlags = syncVarFlags?.Flags ?? SyncFlags.None;
-                    int offset = Utils.GetFieldOffset(field);
                     
                     //syncvars
                     if (ft.IsGenericType && !ft.IsArray && ft.GetGenericTypeDefinition() == typeof(SyncVar<>))
                     {
                         ft = ft.GetGenericArguments()[0];
-                        if (ft.IsEnum)
-                            ft = ft.GetEnumUnderlyingType();
-
-                        if (!ValueTypeProcessor.Registered.TryGetValue(ft, out var valueTypeProcessor))
+                        var valueType = ft;
+                        bool isEnum = valueType.IsEnum;
+                        ValueTypeProcessor valueTypeProcessor = null;
+                        int fieldSize;
+                        if (isEnum)
                         {
-                            Logger.LogError($"Unregistered field type: {ft}");
-                            continue;
+                            //Enum backed fields register their processor from generated code during accessor resolution
+                            fieldSize = Utils.GetEnumSize(valueType);
                         }
-                        int fieldSize = valueTypeProcessor.Size;
-                        if (syncFlags.HasFlagFast(SyncFlags.Interpolated) && !ft.IsEnum)
+                        else
+                        {
+                            if (!ValueTypeProcessor.Registered.TryGetValue(valueType, out valueTypeProcessor))
+                            {
+                                Logger.LogError($"Unregistered field type: {valueType}");
+                                continue;
+                            }
+                            fieldSize = valueTypeProcessor.Size;
+                        }
+                        if (syncFlags.HasFlagFast(SyncFlags.Interpolated) && !isEnum)
                         {
                             InterpolatedCount++;
                         }
-                        var fieldInfo = new EntityFieldInfo($"{baseType.Name}-{field.Name}", valueTypeProcessor, offset, syncVarFlags?.Flags ?? SyncFlags.None);
+                        var fieldInfo = new EntityFieldInfo($"{baseType.Name}-{field.Name}", baseType, field.Name, syncVarFlags?.Flags ?? SyncFlags.None);
+                        fieldInfo.TypeProcessor = valueTypeProcessor;
+                        fieldInfo.ValueType = valueType;
+                        fieldInfo.DeferredTypeProcessor = isEnum;
+                        fieldInfo.Size = (uint)fieldSize;
+                        fieldInfo.IntSize = fieldSize;
                         if (syncFlags.HasFlagFast(SyncFlags.LagCompensated))
                         {
                             lagCompensatedFields.Add(fieldInfo);
@@ -250,11 +268,11 @@ namespace LiteEntitySystem.Internal
                         if (!field.IsInitOnly)
                             throw new Exception($"Syncable fields should be readonly! (Class: {entType} Field: {field.Name})");
                         
-                        syncableFields.Add(new SyncableFieldInfo(offset, syncFlags));
+                        syncableFields.Add(new SyncableFieldInfo(baseType, field.Name, syncFlags));
                         
                         //add custom rollbacked separately
                         if (ft.IsSubclassOf(typeof(SyncableFieldCustomRollback)))
-                            syncableFieldsWithCustomRollback.Add(new SyncableFieldInfo(offset, syncFlags));
+                            syncableFieldsWithCustomRollback.Add(new SyncableFieldInfo(baseType, field.Name, syncFlags));
                         
                         var syncableFieldTypesWithBase = Utils.GetBaseTypes(ft, SyncableFieldType, true, true);
                         while(syncableFieldTypesWithBase.Count > 0)
@@ -273,14 +291,23 @@ namespace LiteEntitySystem.Internal
                                     syncableField.IsStatic) 
                                     continue;
 
-                                syncableFieldType = syncableFieldType.GetGenericArguments()[0];
-                                if (syncableFieldType.IsEnum)
-                                    syncableFieldType = syncableFieldType.GetEnumUnderlyingType();
-
-                                if (!ValueTypeProcessor.Registered.TryGetValue(syncableFieldType, out var valueTypeProcessor))
+                                var syncValueType = syncableFieldType.GetGenericArguments()[0];
+                                bool syncIsEnum = syncValueType.IsEnum;
+                                ValueTypeProcessor valueTypeProcessor = null;
+                                int syncFieldSize;
+                                if (syncIsEnum)
                                 {
-                                    Logger.LogError($"Unregistered field type: {syncableFieldType}");
-                                    continue;
+                                    //Enum backed fields register their processor from generated code during accessor resolution
+                                    syncFieldSize = Utils.GetEnumSize(syncValueType);
+                                }
+                                else
+                                {
+                                    if (!ValueTypeProcessor.Registered.TryGetValue(syncValueType, out valueTypeProcessor))
+                                    {
+                                        Logger.LogError($"Unregistered field type: {syncValueType}");
+                                        continue;
+                                    }
+                                    syncFieldSize = valueTypeProcessor.Size;
                                 }
                                 
                                 var mergedSyncFlags = (syncableField.GetCustomAttribute<SyncVarFlags>()?.Flags ?? SyncFlags.None) | (syncVarFlags?.Flags ?? SyncFlags.None);
@@ -295,8 +322,12 @@ namespace LiteEntitySystem.Internal
                                     Logger.LogWarning($"{SyncFlags.AlwaysRollback} and {SyncFlags.NeverRollBack} flags can't be used together! Field: {syncableType} - {syncableField.Name}");
                                 }
                                 
-                                int syncvarOffset = Utils.GetFieldOffset(syncableField);
-                                var fieldInfo = new EntityFieldInfo($"{baseType.Name}-{field.Name}:{syncableField.Name}", valueTypeProcessor, offset, syncvarOffset, mergedSyncFlags);
+                                var fieldInfo = new EntityFieldInfo($"{baseType.Name}-{field.Name}:{syncableField.Name}", baseType, field.Name, syncableType, syncableField.Name, mergedSyncFlags);
+                                fieldInfo.TypeProcessor = valueTypeProcessor;
+                                fieldInfo.ValueType = syncValueType;
+                                fieldInfo.DeferredTypeProcessor = syncIsEnum;
+                                fieldInfo.Size = (uint)syncFieldSize;
+                                fieldInfo.IntSize = syncFieldSize;
                                 fields.Add(fieldInfo);
                                 FixedFieldsSize += fieldInfo.IntSize;
                                 if (fieldInfo.IsPredicted)
@@ -370,6 +401,104 @@ namespace LiteEntitySystem.Internal
             }
 
             Type = entType;
+        }
+
+        private bool _accessorsResolved;
+
+        private static readonly Dictionary<Type, SyncVarAccessorMap> SyncableAccessorCache = new ();
+
+        /// <summary>
+        /// Resolves generated field accessors. Executed once per class - on the first constructed entity of that class -
+        /// because accessors are emitted per declaring type by the LiteEntitySystem source generator.
+        /// </summary>
+        public void ResolveAccessors(InternalEntity entity)
+        {
+            if (_accessorsResolved)
+                return;
+            _accessorsResolved = true;
+
+            var map = new SyncVarAccessorMap();
+            entity.RegisterSyncVarAccessors(map);
+
+            for (int i = 0; i < Fields.Length; i++)
+            {
+                ref var field = ref Fields[i];
+                if (!map.TryGet(field.OwnerType, field.FieldName, out var ownerAccessor))
+                {
+                    Logger.LogError($"Missing generated accessor for field '{field.Name}'. " +
+                                    "Make sure the LiteEntitySystem source generator is enabled for this assembly.");
+                    continue;
+                }
+
+                if (field.FieldType == FieldType.SyncVar)
+                {
+                    field.ValueAccessor = ownerAccessor;
+                    ResolveDeferredTypeProcessor(ref field);
+                    continue;
+                }
+
+                field.TargetAccessor = (ObjectFieldGetter<SyncableField>)ownerAccessor;
+                var syncableMap = GetSyncableAccessors(field.TargetAccessor(entity));
+                if (!syncableMap.TryGet(field.InnerOwnerType, field.InnerFieldName, out var innerAccessor))
+                {
+                    Logger.LogError($"Missing generated accessor for field '{field.Name}'. " +
+                                    "Make sure the LiteEntitySystem source generator is enabled for this assembly.");
+                    continue;
+                }
+                field.ValueAccessor = innerAccessor;
+                ResolveDeferredTypeProcessor(ref field);
+            }
+
+            //Lag compensated fields are copies of the main field infos - propagate resolved accessors
+            for (int i = 0; i < LagCompensatedFields.Length; i++)
+            {
+                ref var lagField = ref LagCompensatedFields[i];
+                for (int j = 0; j < Fields.Length; j++)
+                {
+                    if (Fields[j].Name != lagField.Name)
+                        continue;
+                    lagField.ValueAccessor = Fields[j].ValueAccessor;
+                    lagField.TargetAccessor = Fields[j].TargetAccessor;
+                    lagField.TypeProcessor = Fields[j].TypeProcessor;
+                    break;
+                }
+            }
+
+            for (int i = 0; i < SyncableFields.Length; i++)
+                ResolveSyncableFieldInfo(ref SyncableFields[i], map);
+            for (int i = 0; i < SyncableFieldsCustomRollback.Length; i++)
+                ResolveSyncableFieldInfo(ref SyncableFieldsCustomRollback[i], map);
+        }
+
+        private static void ResolveDeferredTypeProcessor(ref EntityFieldInfo field)
+        {
+            if (!field.DeferredTypeProcessor)
+                return;
+            if (ValueTypeProcessor.Registered.TryGetValue(field.ValueType, out var processor))
+                field.TypeProcessor = processor;
+            else
+                Logger.LogError($"Unregistered enum field type: {field.ValueType}. " +
+                                "Make sure the LiteEntitySystem source generator is enabled for this assembly.");
+        }
+
+        private static void ResolveSyncableFieldInfo(ref SyncableFieldInfo info, SyncVarAccessorMap map)
+        {
+            if (map.TryGet(info.OwnerType, info.FieldName, out var accessor))
+                info.Accessor = (ObjectFieldGetter<SyncableField>)accessor;
+            else
+                Logger.LogError($"Missing generated accessor for SyncableField '{info.OwnerType}.{info.FieldName}'. " +
+                                "Make sure the LiteEntitySystem source generator is enabled for this assembly.");
+        }
+
+        private static SyncVarAccessorMap GetSyncableAccessors(SyncableField syncableField)
+        {
+            var syncableType = syncableField.GetType();
+            if (SyncableAccessorCache.TryGetValue(syncableType, out var map))
+                return map;
+            map = new SyncVarAccessorMap();
+            syncableField.RegisterSyncVarAccessors(map);
+            SyncableAccessorCache[syncableType] = map;
+            return map;
         }
 
         public void PrepareBaseTypes(Dictionary<Type, ushort> registeredTypeIds, ref ushort singletonCount, ref ushort filterCount)

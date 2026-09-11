@@ -26,7 +26,7 @@ Two kinds of "exactly one" live side by side: `SingletonEntityLogic` is a synchr
 using LiteEntitySystem;
 
 [EntityFlags(EntityFlags.Updateable)]
-public class MatchState : SingletonEntityLogic
+public partial class MatchState : SingletonEntityLogic
 {
     public SyncVar<float> RoundTime;
     public SyncVar<byte> ScoreRed;

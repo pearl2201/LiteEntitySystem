@@ -1,6 +1,6 @@
 ﻿namespace LiteEntitySystem.Extensions
 {
-    public class SyncTimer : SyncableField
+    public partial class SyncTimer : SyncableField
     {
         public float MaxTime => _maxTime;
         public float ElapsedTime => _time;

@@ -127,7 +127,7 @@ namespace LiteEntitySystem.Internal
             {
                 var syncableFields = _entity.ClassData.SyncableFields;
                 for (int i = 0; i < syncableFields.Length; i++)
-                    RefMagic.GetFieldValue<SyncableField>(_entity, syncableFields[i].Offset).OnSyncRequested();
+                    syncableFields[i].Accessor(_entity).OnSyncRequested();
                 _entity.OnSyncRequested();
             }
             catch (Exception e)
@@ -151,7 +151,7 @@ namespace LiteEntitySystem.Internal
             fixed (byte* lastEntityData = _latestEntityData, resultData = packet.Data)
             {
                 //copy header
-                RefMagic.CopyBlock(resultData, lastEntityData, HeaderSize);
+                Buffer.MemoryCopy(lastEntityData, resultData, HeaderSize, HeaderSize);
                 //make diff between default data
                 byte* entityDataAfterHeader = lastEntityData + HeaderSize;
                 
@@ -175,7 +175,7 @@ namespace LiteEntitySystem.Internal
                         continue;
                     
                     *fields |= (byte)(1 << i % 8);        
-                    RefMagic.CopyBlock(resultData + writePosition, entityDataAfterHeader + field.FixedOffset, field.Size);
+                    Buffer.MemoryCopy(entityDataAfterHeader + field.FixedOffset, resultData + writePosition, field.Size, field.Size);
                     writePosition += field.IntSize;
                 }
 
@@ -238,7 +238,7 @@ namespace LiteEntitySystem.Internal
                     }
                     
                     *fields |= (byte)(1 << i % 8);
-                    RefMagic.CopyBlock(resultData + writePosition, entityDataAfterHeader + field.FixedOffset, field.Size);
+                    Buffer.MemoryCopy(entityDataAfterHeader + field.FixedOffset, resultData + writePosition, field.Size, field.Size);
                     writePosition += field.IntSize;
                 }
 
@@ -379,7 +379,7 @@ namespace LiteEntitySystem.Internal
                     }
                     
                     *fields |= (byte)(1 << i % 8);
-                    RefMagic.CopyBlock(resultData + position, entityDataAfterHeader + field.FixedOffset, field.Size);
+                    Buffer.MemoryCopy(entityDataAfterHeader + field.FixedOffset, resultData + position, field.Size, field.Size);
                     position += field.IntSize;
                     //Logger.Log($"WF {_entity.GetType()} f: {_classData.Fields[i].Name}");
                 }

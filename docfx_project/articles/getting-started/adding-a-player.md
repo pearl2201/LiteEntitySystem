@@ -38,7 +38,7 @@ public struct PlayerInput
 }
 
 [EntityFlags(EntityFlags.Updateable)]
-public class MyPlayer : PawnLogic
+public partial class MyPlayer : PawnLogic
 {
     [SyncVarFlags(SyncFlags.Interpolated)]
     public SyncVar<float> X;

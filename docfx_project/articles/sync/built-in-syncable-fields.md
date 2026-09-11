@@ -38,7 +38,7 @@ Declare as `readonly` fields, mutate on the server, read anywhere — the rules 
 using LiteEntitySystem;
 using LiteEntitySystem.Extensions;
 
-public class Inventory : EntityLogic
+public partial class Inventory : EntityLogic
 {
     public readonly SyncString OwnerName = new();
     public readonly SyncList<ushort> Items = new();

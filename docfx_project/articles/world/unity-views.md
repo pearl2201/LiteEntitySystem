@@ -25,7 +25,7 @@ using LiteEntitySystem;
 using UnityEngine;
 
 [EntityFlags(EntityFlags.Updateable)]
-public class ViewPlayer : PawnLogic
+public partial class ViewPlayer : PawnLogic
 {
     [SyncVarFlags(SyncFlags.Interpolated)]
     public SyncVar<Vector2> Position;

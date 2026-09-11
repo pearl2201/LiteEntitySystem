@@ -28,7 +28,7 @@ using System;
 using LiteEntitySystem;
 
 [EntityFlags(EntityFlags.Updateable)]
-public class ScoreCrystal : EntityLogic
+public partial class ScoreCrystal : EntityLogic
 {
     [SyncVarFlags(SyncFlags.Interpolated)]
     public SyncVar<float> Height;

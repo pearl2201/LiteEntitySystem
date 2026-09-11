@@ -13,7 +13,7 @@ namespace LiteEntitySystem.Internal
         Removed = 4
     }
     
-    public abstract class InternalEntity : InternalBaseClass, IComparable<InternalEntity>
+    public abstract partial class InternalEntity : InternalBaseClass, IComparable<InternalEntity>
     {
         [SyncVarFlags(SyncFlags.NeverRollBack)]
         internal SyncVar<byte> InternalOwnerId;
@@ -256,17 +256,18 @@ namespace LiteEntitySystem.Internal
         internal void RegisterRpcInternal()
         {
             ref var classData = ref EntityManager.ClassDataDict[ClassId];
+            classData.ResolveAccessors(this);
             
             //setup field ids for BindOnChange and pass on server this for OnChangedEvent to StateSerializer
             for (int i = 0; i < classData.FieldsCount; i++)
             {
                 ref var field = ref classData.Fields[i];
-                var target = field.GetTargetObjectAndOffset(this, out int offset);
+                var target = field.GetTargetObjectAndAccessor(this, out var accessor);
                 
                 //init before SyncVar init because SyncVar can call OnChange
                 if (field.FieldType == FieldType.SyncableSyncVar)
-                    RefMagic.GetFieldValue<SyncableField>(this, field.Offset).Init(this, field.Flags);
-                field.TypeProcessor.InitSyncVar(target, offset, this, (ushort)i);
+                    field.TargetAccessor(this).Init(this, field.Flags);
+                field.TypeProcessor.InitSyncVar(target, accessor, this, (ushort)i);
             }
           
             List<RpcFieldInfo> rpcCache = null;
@@ -289,7 +290,7 @@ namespace LiteEntitySystem.Internal
             for (int i = 0; i < classData.SyncableFields.Length; i++)
             {
                 ref var syncFieldInfo = ref classData.SyncableFields[i];
-                var syncField = RefMagic.GetFieldValue<SyncableField>(this, syncFieldInfo.Offset);
+                var syncField = syncFieldInfo.Accessor(this);
                 syncField.Init(this, syncFieldInfo.Flags);
                 if (rpcCache == null) //classData.RemoteCallsClient != null
                 {
@@ -299,7 +300,7 @@ namespace LiteEntitySystem.Internal
                 {
                     syncField.RPCOffset = (ushort)rpcCache.Count;
                     syncFieldInfo.RPCOffset = syncField.RPCOffset;
-                    var syncablesRegistrator = new SyncableRPCRegistrator(syncFieldInfo.Offset, rpcCache, classData.Fields);
+                    var syncablesRegistrator = new SyncableRPCRegistrator(syncFieldInfo.Accessor, rpcCache, classData.Fields);
                     syncField.RegisterRPC(ref syncablesRegistrator);
                 }
             }

@@ -24,4 +24,9 @@
       <ProjectReference Include="..\LiteEntitySystem\LiteEntitySystem.csproj" />
     </ItemGroup>
 
+    <!-- Run the source generator on this test assembly as well, to verify cross-assembly accessor generation -->
+    <ItemGroup>
+      <Analyzer Include="..\LiteEntitySystemAnalyzer\bin\$(Configuration)\netstandard2.0\LiteEntitySystemAnalyzer.dll" />
+    </ItemGroup>
+
 </Project>

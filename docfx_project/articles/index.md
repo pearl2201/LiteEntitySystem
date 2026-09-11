@@ -31,7 +31,7 @@ A synchronized entity looks like this — a plain class with a `SyncVar` field. 
 ```csharp
 using LiteEntitySystem;
 
-public class Door : EntityLogic
+public partial class Door : EntityLogic
 {
     [SyncVarFlags(SyncFlags.AlwaysRollback)]
     private SyncVar<bool> _isOpen;

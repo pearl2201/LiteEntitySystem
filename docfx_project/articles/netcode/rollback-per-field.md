@@ -29,7 +29,7 @@ The standard use of `AlwaysRollback`: a shooter that wants its victim's health b
 using LiteEntitySystem;
 
 [EntityFlags(EntityFlags.Updateable)]
-public class Target : PawnLogic
+public partial class Target : PawnLogic
 {
     // predicted by whoever shoots this entity, not just by its owner
     [SyncVarFlags(SyncFlags.AlwaysRollback)]

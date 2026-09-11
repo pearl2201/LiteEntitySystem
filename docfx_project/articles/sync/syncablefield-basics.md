@@ -24,7 +24,7 @@ A `SyncableField` synchronizes data that doesn't fit in a fixed-size value — s
 using LiteEntitySystem;
 using LiteEntitySystem.Extensions;
 
-public class Locker : EntityLogic
+public partial class Locker : EntityLogic
 {
     // syncable fields are readonly instance fields
     public readonly SyncString Label = new();

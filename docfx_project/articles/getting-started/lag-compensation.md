@@ -26,7 +26,7 @@ A pawn whose position participates in lag compensation, and a shot that uses it:
 using LiteEntitySystem;
 
 [EntityFlags(EntityFlags.Updateable)]
-public class ShooterPlayer : PawnLogic
+public partial class ShooterPlayer : PawnLogic
 {
     [SyncVarFlags(SyncFlags.Interpolated | SyncFlags.LagCompensated)]
     public SyncVar<float> X;

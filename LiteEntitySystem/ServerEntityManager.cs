@@ -865,7 +865,7 @@ namespace LiteEntitySystem
                     header->Part++;
 
                     //repeat in next packet
-                    RefMagic.CopyBlock(packetBuffer + sizeof(DiffPartHeader), packetBuffer + maxPartSize, (uint)overflow);
+                    Buffer.MemoryCopy(packetBuffer + maxPartSize, packetBuffer + sizeof(DiffPartHeader), overflow, overflow);
                     writePosition = sizeof(DiffPartHeader) + overflow;
                     overflow = writePosition - maxPartSize;
                 }
@@ -976,7 +976,7 @@ namespace LiteEntitySystem
             rpc.Init(entity, _tick, (ushort)dataSize, rpcId, flags);
             if(value.Length > 0)
                 fixed(void* rawValue = value, rawData = rpc.Data)
-                    RefMagic.CopyBlock(rawData, rawValue, (uint)dataSize);
+                    Buffer.MemoryCopy(rawValue, rawData, dataSize, dataSize);
             if(forPlayer == null)
             {
                 for(int i = 0; i < _netPlayers.Count; i++)

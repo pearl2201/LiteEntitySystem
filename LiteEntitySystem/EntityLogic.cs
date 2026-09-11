@@ -36,7 +36,7 @@ namespace LiteEntitySystem
     /// <summary>
     /// Base class for simple (not controlled by controller) entity
     /// </summary>
-    public abstract class EntityLogic : InternalEntity
+    public abstract partial class EntityLogic : InternalEntity
     {
         private enum ChangeType
         {

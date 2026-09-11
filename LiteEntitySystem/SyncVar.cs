@@ -75,7 +75,7 @@ namespace LiteEntitySystem
     /// </summary>
     /// <typeparam name="T">Variable type</typeparam>
     [StructLayout(LayoutKind.Sequential)]
-    public struct SyncVar<T> : ISyncVar<T>, IEquatable<T>, IEquatable<SyncVar<T>> where T : unmanaged
+    public struct SyncVar<T> : IEquatable<T>, IEquatable<SyncVar<T>> where T : unmanaged
     {
         private T _value;
         private T _interpValue;
@@ -98,18 +98,18 @@ namespace LiteEntitySystem
             : Container.ClientManager.GetInterpolatedValue(ref this, _interpValue);
         
         //for interpolation
-        void ISyncVar<T>.SvSetInterpValue(T value) => _interpValue = value;
-        void ISyncVar<T>.SvSetInterpValueFromCurrent() => _interpValue = _value;
+        internal void SetInterpValue(T value) => _interpValue = value;
+        internal void SetInterpValueFromCurrent() => _interpValue = _value;
         
-        void ISyncVar<T>.SvSetDirect(T value) => _value = value;
+        internal void SetDirect(T value) => _value = value;
         
-        void ISyncVar<T>.SvSetDirectAndStorePrev(T value, out T prevValue)
+        internal void SetDirectAndStorePrev(T value, out T prevValue)
         {
             prevValue = _value;
             _value = value;
         }
         
-        bool ISyncVar<T>.SvSetFromAndSync(ref T value)
+        internal bool SetFromAndSync(ref T value)
         {
             if (!FastEquals(ref _value, ref value))
             {

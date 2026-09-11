@@ -49,7 +49,7 @@ public struct KillMessage : ISpanSerializable
     }
 }
 
-public class Announcer : EntityLogic
+public partial class Announcer : EntityLogic
 {
     private static RemoteCall<DamageInfo> _damageRpc;
     private static RemoteCallSpan<int> _comboRpc;

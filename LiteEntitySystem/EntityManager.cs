@@ -267,6 +267,16 @@ namespace LiteEntitySystem
         /// </summary>
         public static void RegisterFieldType<T>() where T : unmanaged =>
             ValueTypeProcessor.Registered[typeof(T)] = new ValueTypeProcessor<T>();
+
+        /// <summary>
+        /// Registers a field type processor for <typeparamref name="T"/> only if none was registered yet.
+        /// Used by generated code for enum backed sync vars, so that a user supplied processor is not replaced.
+        /// </summary>
+        public static void EnsureFieldTypeRegistered<T>() where T : unmanaged
+        {
+            if (!ValueTypeProcessor.Registered.ContainsKey(typeof(T)))
+                ValueTypeProcessor.Registered[typeof(T)] = new ValueTypeProcessor<T>();
+        }
         
         private static void RegisterBasicFieldType<T>(ValueTypeProcessor<T> proc) where T : unmanaged =>
             ValueTypeProcessor.Registered.Add(typeof(T), proc);
@@ -363,8 +373,8 @@ namespace LiteEntitySystem
             for(int i = 0; i < classData.FieldsCount; i++)
             {
                 ref var fi = ref classData.Fields[i]; 
-                var target = fi.GetTargetObjectAndOffset(entity, out int offset);
-                resultPrinter.PrintFieldInfo(fi.Name, fi.TypeProcessor.ToString(target, offset));
+                var target = fi.GetTargetObjectAndAccessor(entity, out var accessor);
+                resultPrinter.PrintFieldInfo(fi.Name, fi.TypeProcessor.ToString(target, accessor));
             }
         }
 

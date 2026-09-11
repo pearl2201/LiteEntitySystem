@@ -183,8 +183,8 @@ namespace LiteEntitySystem.Internal
                     if (!Utils.IsBitSet(Data, entityFieldsOffset, i))
                         continue;
                     ref var field = ref classData.Fields[i];
-                    var target = field.GetTargetObjectAndOffset(entity, out int fieldOffset);
-                    field.TypeProcessor.SetInterpValue(target, fieldOffset, rawData + stateReaderOffset);
+                    var target = field.GetTargetObjectAndAccessor(entity, out var accessor);
+                    field.TypeProcessor.SetInterpValue(target, accessor, rawData + stateReaderOffset);
                     stateReaderOffset += field.IntSize;
                 }
             }
@@ -281,7 +281,7 @@ namespace LiteEntitySystem.Internal
                     }
                     
                     var rpcFieldInfo = _entityManager.ClassDataDict[entity.ClassId].RemoteCallsClient[header.Id];
-                    if (rpcFieldInfo.SyncableOffset == -1)
+                    if (rpcFieldInfo.SyncableAccessor == null)
                     {
                         try
                         {
@@ -310,7 +310,7 @@ namespace LiteEntitySystem.Internal
                     }
                     else
                     {
-                        var syncableField = RefMagic.GetFieldValue<SyncableField>(entity, rpcFieldInfo.SyncableOffset);
+                        var syncableField = rpcFieldInfo.SyncableAccessor(entity);
                         if (syncableField is SyncableFieldCustomRollback sf && SyncablesBufferSet.Add(sf))
                             sf.BeforeReadRPC();
                         
@@ -446,7 +446,7 @@ namespace LiteEntitySystem.Internal
                 ? _partMtu * _totalPartsCount 
                 : _partMtu * partHeader.Part + partSize);
             fixed(byte* stateData = Data)
-                RefMagic.CopyBlock(stateData + _partMtu * partHeader.Part, rawData + sizeof(DiffPartHeader), (uint)partSize);
+                Buffer.MemoryCopy(rawData + sizeof(DiffPartHeader), stateData + _partMtu * partHeader.Part, partSize, partSize);
             _receivedParts[partHeader.Part] = true;
             Size += partSize;
             _receivedPartsCount++;
